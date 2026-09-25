@@ -15,10 +15,11 @@ import SwiftUI
 struct MusicPlayerView: View {
     @EnvironmentObject var vm: BoringViewModel
     let albumArtNamespace: Namespace.ID
+    @Default(.canNewDesign) var canNewDesign
 
     var body: some View {
         HStack {
-            AlbumArtView(vm: vm, albumArtNamespace: albumArtNamespace).padding(.all, 5)
+            AlbumArtView(vm: vm, albumArtNamespace: albumArtNamespace).padding(.all, canNewDesign ? 8 : 5)
             MusicControlsView().drawingGroup().compositingGroup()
         }
     }
@@ -28,6 +29,13 @@ struct AlbumArtView: View {
     @ObservedObject var musicManager = MusicManager.shared
     @ObservedObject var vm: BoringViewModel
     let albumArtNamespace: Namespace.ID
+    @Default(.canNewDesign) var canNewDesign
+
+    private var cornerRadius: CGFloat {
+        canNewDesign ? 18.0 : (Defaults[.cornerRadiusScaling]
+            ? MusicPlayerImageSizes.cornerRadiusInset.opened
+            : MusicPlayerImageSizes.cornerRadiusInset.closed)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -42,12 +50,7 @@ struct AlbumArtView: View {
         Image(nsImage: musicManager.albumArt)
             .resizable()
             .clipped()
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: Defaults[.cornerRadiusScaling]
-                        ? MusicPlayerImageSizes.cornerRadiusInset.opened
-                        : MusicPlayerImageSizes.cornerRadiusInset.closed)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .aspectRatio(1, contentMode: .fit)
             .scaleEffect(x: 1.3, y: 1.4)
             .rotationEffect(.degrees(92))
@@ -87,12 +90,7 @@ struct AlbumArtView: View {
             .aspectRatio(1, contentMode: .fit)
             .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
             .clipped()
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius: Defaults[.cornerRadiusScaling]
-                        ? MusicPlayerImageSizes.cornerRadiusInset.opened
-                        : MusicPlayerImageSizes.cornerRadiusInset.closed)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 
     @ViewBuilder
@@ -111,13 +109,14 @@ struct AlbumArtView: View {
 
 struct MusicControlsView: View {
     @ObservedObject var musicManager = MusicManager.shared
-        @EnvironmentObject var vm: BoringViewModel
-        @ObservedObject var webcamManager = WebcamManager.shared
+    @EnvironmentObject var vm: BoringViewModel
+    @ObservedObject var webcamManager = WebcamManager.shared
     @State private var sliderValue: Double = 0
     @State private var dragging: Bool = false
     @State private var lastDragged: Date = .distantPast
     @Default(.musicControlSlots) private var slotConfig
     @Default(.musicControlSlotLimit) private var slotLimit
+    @Default(.canNewDesign) private var canNewDesign
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -143,10 +142,20 @@ struct MusicControlsView: View {
             MarqueeText(
                 $musicManager.songTitle, font: .headline, nsFont: .headline, textColor: .white,
                 frameWidth: width)
+            if canNewDesign && !musicManager.album.isEmpty {
+                MarqueeText(
+                    $musicManager.album,
+                    font: .subheadline,
+                    nsFont: .subheadline,
+                    textColor: .gray,
+                    frameWidth: width
+                )
+                .fontWeight(.medium)
+            }
             MarqueeText(
                 $musicManager.artistName,
-                font: .headline,
-                nsFont: .headline,
+                font: canNewDesign ? .subheadline : .headline,
+                nsFont: canNewDesign ? .subheadline : .headline,
                 textColor: Defaults[.playerColorTinting]
                     ? Color(nsColor: musicManager.avgColor)
                         .ensureMinimumBrightness(factor: 0.6) : .gray,
@@ -212,7 +221,7 @@ struct MusicControlsView: View {
 
     private var slotToolbar: some View {
         let slots = activeSlots
-        return HStack(spacing: 6) {
+        return HStack(spacing: canNewDesign ? 20 : 6) {
             ForEach(Array(slots.enumerated()), id: \.offset) { index, slot in
                 slotView(for: slot)
                     .frame(alignment: .center)
@@ -222,6 +231,9 @@ struct MusicControlsView: View {
     }
 
     private var activeSlots: [MusicControlButton] {
+        if canNewDesign {
+            return [.previous, .playPause, .next]
+        }
         let sanitizedLimit = min(
             max(slotLimit, MusicControlButton.minSlotCount),
             MusicControlButton.maxSlotCount
@@ -245,7 +257,7 @@ struct MusicControlsView: View {
                 MusicManager.shared.toggleShuffle()
             }
         case .previous:
-            HoverButton(icon: "backward.fill", scale: .medium) {
+            HoverButton(icon: canNewDesign ? "backward.end.fill" : "backward.fill", scale: .medium) {
                 MusicManager.shared.previousTrack()
             }
         case .playPause:
@@ -253,7 +265,7 @@ struct MusicControlsView: View {
                 MusicManager.shared.togglePlay()
             }
         case .next:
-            HoverButton(icon: "forward.fill", scale: .medium) {
+            HoverButton(icon: canNewDesign ? "forward.end.fill" : "forward.fill", scale: .medium) {
                 MusicManager.shared.nextTrack()
             }
         case .repeatMode:
@@ -424,6 +436,7 @@ struct NotchHomeView: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     let albumArtNamespace: Namespace.ID
+    @Default(.canNewDesign) var canNewDesign
 
     var body: some View {
         Group {
@@ -436,7 +449,7 @@ struct NotchHomeView: View {
     }
 
     private var shouldShowCamera: Bool {
-        Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
+        !canNewDesign && Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
     }
 
     private var mainContent: some View {
@@ -461,8 +474,8 @@ struct NotchHomeView: View {
                     .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
             }
         }
-        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
-        .blur(radius: vm.notchState == .closed ? 30 : 0)
+        .transition(.opacity)
+        .blur(radius: vm.notchState == .closed ? 6 : 0)
     }
 }
 

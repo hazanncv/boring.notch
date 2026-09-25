@@ -130,7 +130,8 @@ private struct ScrollMonitor: NSViewRepresentable {
             let scale: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 8
             let s = raw * scale
             guard s.magnitude > noiseThreshold else { return }
-            accumulated = s > 0 ? accumulated + s : 0
+            // Only accumulate positive deltas — brief reversals no longer reset progress.
+            if s > 0 { accumulated += s }
 
             if !active && accumulated >= threshold {
                 active = true

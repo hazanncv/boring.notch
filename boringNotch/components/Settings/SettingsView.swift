@@ -57,6 +57,9 @@ struct SettingsView: View {
                 // NavigationLink(value: "Extensions") {
                 //     Label("Extensions", systemImage: "puzzlepiece.extension")
                 // }
+                NavigationLink(value: "CanEdited") {
+                    Label("Can Edited", systemImage: "slider.horizontal.3")
+                }
                 NavigationLink(value: "Advanced") {
                     Label("Advanced", systemImage: "gearshape.2")
                 }
@@ -89,6 +92,8 @@ struct SettingsView: View {
                     Shortcuts()
                 case "Extensions":
                     GeneralSettings()
+                case "CanEdited":
+                    CanEditedSettings()
                 case "Advanced":
                     Advanced()
                 case "About":
@@ -1791,6 +1796,104 @@ func warningBadge(_ text: String, _ description: String) -> some View {
             }
             Spacer()
         }
+    }
+}
+
+struct CanEditedSettings: View {
+    @Default(.canSwipeThreshold) var canSwipeThreshold
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Swipe sensitivity")
+                        Spacer()
+                        Text("\(Int(canSwipeThreshold)) px")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $canSwipeThreshold, in: 20...200, step: 5) {
+                        EmptyView()
+                    } minimumValueLabel: {
+                        Text("Short").font(.caption).foregroundStyle(.secondary)
+                    } maximumValueLabel: {
+                        Text("Long").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("How far you need to swipe before an action fires")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                Defaults.Toggle(key: .canHoverPeek) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hover peek")
+                        Text("Scale the notch slightly on hover instead of opening it")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Defaults.Toggle(key: .canSwipeUpCycle) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Swipe-up state cycling")
+                        Text("Swipe up cycles: full notch → media bar → empty notch")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Defaults.Toggle(key: .canSwipeTracksHorizontal) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Swipe left/right to skip tracks")
+                        Text("Two-finger horizontal swipe skips to previous or next track")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Gestures")
+            }
+
+            Section {
+                Defaults.Toggle(key: .canCalendarNoLeadingZeros) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No leading zeros on day numbers")
+                        Text("Show \"5\" instead of \"05\" in the calendar date wheel")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Calendar")
+            }
+
+            Section {
+                Defaults.Toggle(key: .canSnappyAnimations) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Snappy animations")
+                        Text("Faster, more responsive open/close timings inspired by Notch Nook")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Animations")
+            }
+
+            Section {
+                Defaults.Toggle(key: .canNewDesign) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("New design")
+                        Text("Squircle album art (18 px radius), no camera widget, and Files Tray layout in shelf")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Design")
+            }
+        }
+        .navigationTitle("Can Edited")
+        .tint(.effectiveAccent)
     }
 }
 

@@ -5,6 +5,7 @@
     //  Created by Harsh Vardhan  Goswami  on 27/08/24.
     //
 
+import Defaults
 import Foundation
 
 
@@ -24,7 +25,7 @@ extension Date {
     
     var date: String {
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "dd"
+        dateFormatter.dateFormat = Defaults[.canCalendarNoLeadingZeros] ? "d" : "dd"
         return dateFormatter.string(from: self)
     }
     

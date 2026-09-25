@@ -183,6 +183,15 @@ extension Defaults.Keys {
     // MARK: Media Controller
     static let mediaController = Key<MediaControllerType>("mediaController", default: defaultMediaController)
     
+    // MARK: Can Edited
+    static let canSwipeThreshold = Key<CGFloat>("canSwipeThreshold", default: 50)
+    static let canHoverPeek = Key<Bool>("canHoverPeek", default: true)
+    static let canSwipeUpCycle = Key<Bool>("canSwipeUpCycle", default: true)
+    static let canSwipeTracksHorizontal = Key<Bool>("canSwipeTracksHorizontal", default: true)
+    static let canCalendarNoLeadingZeros = Key<Bool>("canCalendarNoLeadingZeros", default: true)
+    static let canSnappyAnimations = Key<Bool>("canSnappyAnimations", default: true)
+    static let canNewDesign = Key<Bool>("canNewDesign", default: false)
+
     // MARK: Advanced Settings
     static let useCustomAccentColor = Key<Bool>("useCustomAccentColor", default: false)
     static let customAccentColorData = Key<Data?>("customAccentColorData", default: nil)

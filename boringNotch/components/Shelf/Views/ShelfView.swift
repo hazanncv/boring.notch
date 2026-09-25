@@ -7,23 +7,35 @@
 
 import SwiftUI
 import AppKit
+import Defaults
 
 struct ShelfView: View {
     @EnvironmentObject var vm: BoringViewModel
     @StateObject var tvm = ShelfStateViewModel.shared
     @StateObject var selection = ShelfSelectionModel.shared
     @StateObject private var quickLookService = QuickLookService()
+    @Default(.canNewDesign) var canNewDesign
     private let spacing: CGFloat = 8
 
     var body: some View {
         HStack(spacing: 12) {
-            FileShareView()
-                .aspectRatio(1, contentMode: .fit)
-                .environmentObject(vm)
-            panel
-                .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], isTargeted: $vm.dragDetectorTargeting) { providers in
-                    handleDrop(providers: providers)
-                }
+            if canNewDesign {
+                newDesignFilesPanel
+                    .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], isTargeted: $vm.dragDetectorTargeting) { providers in
+                        handleDrop(providers: providers)
+                    }
+                FileShareView()
+                    .aspectRatio(1, contentMode: .fit)
+                    .environmentObject(vm)
+            } else {
+                FileShareView()
+                    .aspectRatio(1, contentMode: .fit)
+                    .environmentObject(vm)
+                panel
+                    .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], isTargeted: $vm.dragDetectorTargeting) { providers in
+                        handleDrop(providers: providers)
+                    }
+            }
         }
         // Bind Quick Look to shelf selection
         .onChange(of: selection.selectedIDs) {
@@ -56,6 +68,31 @@ struct ShelfView: View {
         if !urls.isEmpty {
             quickLookService.updateSelection(urls: urls)
         }
+    }
+
+    var newDesignFilesPanel: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .stroke(
+                vm.dragDetectorTargeting
+                    ? Color.accentColor.opacity(0.9)
+                    : Color.white.opacity(0.1),
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
+            )
+            .overlay {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Files Tray", systemImage: "tray.fill")
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                    content
+                }
+                .padding(12)
+            }
+            .transaction { transaction in
+                transaction.animation = vm.animation
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { selection.clear() }
     }
 
     var panel: some View {

@@ -30,18 +30,37 @@ struct ContentView: View {
     @State private var gestureProgress: CGFloat = .zero
 
     @State private var haptics: Bool = false
+    @State private var musicBarHidden: Bool = false
+    @State private var upGestureTriggered: Bool = false
+    @State private var downGestureTriggered: Bool = false
+    @State private var horizontalGestureTriggered: Bool = false
+
+    // Swipe overlay
+    @State private var swipeIndicatorDirection: PanDirection? = nil
+    @State private var swipeIndicatorOpacity: Double = 0
+    @State private var swipeIndicatorTask: Task<Void, Never>? = nil
+
+    // Hover song details
+    @State private var showSongDetails: Bool = false
+    @State private var songDetailsHoverTask: Task<Void, Never>? = nil
 
     @Namespace var albumArtNamespace
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
-
     @Default(.showNotHumanFace) var showNotHumanFace
+    @Default(.canHoverPeek) var canHoverPeek
+    @Default(.canSnappyAnimations) var canSnappyAnimations
+    @Default(.canNewDesign) var canNewDesign
 
-    // Shared interactive spring for movement/resizing to avoid conflicting animations
-    private let animationSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
+    private var animationSpring: Animation {
+        canSnappyAnimations
+            ? .interactiveSpring(response: 0.3, dampingFraction: 0.78, blendDuration: 0)
+            : .interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
+    }
 
     private let extendedHoverPadding: CGFloat = 30
     private let zeroHeightHoverPadding: CGFloat = 10
+    @Default(.canSwipeThreshold) private var swipeThreshold
 
     private var topCornerRadius: CGFloat {
        ((vm.notchState == .open) && Defaults[.cornerRadiusScaling])
@@ -81,11 +100,15 @@ struct ContentView: View {
     }
 
     var body: some View {
-        // Calculate scale based on gesture progress only
         let gestureScale: CGFloat = {
-            guard gestureProgress != 0 else { return 1.0 }
-            let scaleFactor = 1.0 + gestureProgress * 0.01
-            return max(0.6, scaleFactor)
+            if gestureProgress != 0 {
+                let scaleFactor = 1.0 + gestureProgress * 0.01
+                return max(0.6, scaleFactor)
+            }
+            if vm.notchState == .closed && isHovering && canHoverPeek {
+                return 1.04
+            }
+            return 1.0
         }()
         
         ZStack(alignment: .top) {
@@ -120,8 +143,12 @@ struct ContentView: View {
                 mainLayout
                     .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
                     .conditionalModifier(true) { view in
-                        let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
-                        let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
+                        let openAnimation = canSnappyAnimations
+                            ? Animation.spring(response: 0.32, dampingFraction: 0.75, blendDuration: 0)
+                            : Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
+                        let closeAnimation = canSnappyAnimations
+                            ? Animation.spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0)
+                            : Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
                         
                         return view
                             .animation(vm.notchState == .open ? openAnimation : closeAnimation, value: vm.notchState)
@@ -144,6 +171,15 @@ struct ContentView: View {
                         view
                             .panGesture(direction: .up) { translation, phase in
                                 handleUpGesture(translation: translation, phase: phase)
+                            }
+                    }
+                    .conditionalModifier(Defaults[.enableGestures]) { view in
+                        view
+                            .panGesture(direction: .right) { translation, phase in
+                                handleHorizontalGesture(translation: translation, phase: phase, direction: .right)
+                            }
+                            .panGesture(direction: .left) { translation, phase in
+                                handleHorizontalGesture(translation: translation, phase: phase, direction: .left)
                             }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
@@ -200,6 +236,12 @@ struct ContentView: View {
                         .fill(Color.black.opacity(0.01))
                         .frame(width: computedChinWidth, height: vm.chinHeight)
                 }
+            }
+            // Song details hover card (shown after 5 seconds of hovering, new design only)
+            if vm.notchState == .closed && showSongDetails {
+                SongDetailsCard()
+                    .padding(.top, max(vm.effectiveClosedNotchHeight + 6, 30))
+                    .zIndex(10)
             }
         }
         .padding(.bottom, 8)
@@ -287,7 +329,7 @@ struct ContentView: View {
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
-                      } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
+                      } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed && !musicBarHidden {
                           MusicLiveActivity()
                               .frame(alignment: .center)
                       } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed  {
@@ -352,9 +394,9 @@ struct ContentView: View {
                     }
                 }
                 .transition(
-                    .scale(scale: 0.8, anchor: .top)
+                    .scale(scale: 0.92, anchor: .top)
                     .combined(with: .opacity)
-                    .animation(.smooth(duration: 0.35))
+                    .animation(.smooth(duration: 0.2))
                 )
                 .zIndex(1)
                 .allowsHitTesting(vm.notchState == .open)
@@ -484,6 +526,55 @@ struct ContentView: View {
             height: vm.effectiveClosedNotchHeight,
             alignment: .center
         )
+        .overlay {
+            if let dir = swipeIndicatorDirection, swipeIndicatorOpacity > 0 {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 44, height: 28)
+                    Image(systemName: dir == .right ? "forward.end.fill" : "backward.end.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .opacity(swipeIndicatorOpacity)
+            }
+        }
+    }
+
+    private func handleHorizontalGesture(translation: CGFloat, phase: NSEvent.Phase, direction: PanDirection) {
+        guard vm.notchState == .closed else { return }
+        guard Defaults[.canSwipeTracksHorizontal] else {
+            if phase == .ended { horizontalGestureTriggered = false }
+            return
+        }
+
+        if phase == .ended {
+            horizontalGestureTriggered = false
+            return
+        }
+        guard !horizontalGestureTriggered else { return }
+        guard musicManager.isPlaying || !musicManager.isPlayerIdle else { return }
+
+        if translation > swipeThreshold {
+            horizontalGestureTriggered = true
+            // Show direction indicator
+            swipeIndicatorDirection = direction
+            swipeIndicatorTask?.cancel()
+            withAnimation(.easeIn(duration: 0.12)) { swipeIndicatorOpacity = 1.0 }
+            swipeIndicatorTask = Task {
+                try? await Task.sleep(for: .milliseconds(750))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation(.easeOut(duration: 0.3)) { self.swipeIndicatorOpacity = 0 }
+                }
+            }
+            if direction == .right {
+                MusicManager.shared.nextTrack()
+            } else {
+                MusicManager.shared.previousTrack()
+            }
+            if Defaults[.enableHaptics] { haptics.toggle() }
+        }
     }
 
     @ViewBuilder
@@ -513,42 +604,39 @@ struct ContentView: View {
     private func handleHover(_ hovering: Bool) {
         if coordinator.firstLaunch { return }
         hoverTask?.cancel()
-        
+
         if hovering {
             withAnimation(animationSpring) {
                 isHovering = true
             }
-            
             if vm.notchState == .closed && Defaults[.enableHaptics] {
                 haptics.toggle()
             }
-            
-            guard vm.notchState == .closed,
-                  !coordinator.sneakPeek.show,
-                  Defaults[.openNotchOnHover] else { return }
-            
-            hoverTask = Task {
-                try? await Task.sleep(for: .seconds(Defaults[.minimumHoverDuration]))
-                guard !Task.isCancelled else { return }
-                
-                await MainActor.run {
-                    guard self.vm.notchState == .closed,
-                          self.isHovering,
-                          !self.coordinator.sneakPeek.show else { return }
-                    
-                    self.doOpen()
+            // 5-second hover → show song details card (new design only)
+            if vm.notchState == .closed && canNewDesign {
+                songDetailsHoverTask?.cancel()
+                songDetailsHoverTask = Task {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            self.showSongDetails = true
+                        }
+                    }
                 }
             }
         } else {
+            songDetailsHoverTask?.cancel()
+            withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) { showSongDetails = false }
             hoverTask = Task {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled else { return }
-                
+
                 await MainActor.run {
                     withAnimation(animationSpring) {
                         self.isHovering = false
                     }
-                    
+
                     if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
                         self.vm.close()
                     }
@@ -564,50 +652,93 @@ struct ContentView: View {
 
         if phase == .ended {
             withAnimation(animationSpring) { gestureProgress = .zero }
+            downGestureTriggered = false
             return
         }
 
+        // Stop all processing once the action has fired — prevents scale bleed and re-triggers
+        guard !downGestureTriggered else { return }
+
         withAnimation(animationSpring) {
-            gestureProgress = (translation / Defaults[.gestureSensitivity]) * 20
+            let rawProgress = (translation / Defaults[.gestureSensitivity]) * 20
+            gestureProgress = (Defaults[.canSwipeUpCycle] && musicBarHidden) ? min(rawProgress, 4) : rawProgress
         }
 
-        if translation > Defaults[.gestureSensitivity] {
-            if Defaults[.enableHaptics] {
-                haptics.toggle()
+        if translation > swipeThreshold {
+            downGestureTriggered = true
+            if Defaults[.enableHaptics] { haptics.toggle() }
+            withAnimation(animationSpring) { gestureProgress = .zero }
+
+            if Defaults[.canSwipeUpCycle] && musicBarHidden {
+                withAnimation(animationSpring) { musicBarHidden = false }
+            } else {
+                doOpen()
             }
-            withAnimation(animationSpring) {
-                gestureProgress = .zero
-            }
-            doOpen()
         }
     }
 
     private func handleUpGesture(translation: CGFloat, phase: NSEvent.Phase) {
-        guard vm.notchState == .open && !vm.isHoveringCalendar else { return }
-
-        withAnimation(animationSpring) {
-            gestureProgress = (translation / Defaults[.gestureSensitivity]) * -20
-        }
-
         if phase == .ended {
-            withAnimation(animationSpring) {
-                gestureProgress = .zero
-            }
+            withAnimation(animationSpring) { gestureProgress = .zero }
+            upGestureTriggered = false
+            return
         }
 
-        if translation > Defaults[.gestureSensitivity] {
+        if vm.notchState == .open && !vm.isHoveringCalendar {
             withAnimation(animationSpring) {
-                isHovering = false
-            }
-            if !SharingStateManager.shared.preventNotchClose { 
-                gestureProgress = .zero
-                vm.close()
+                gestureProgress = (translation / Defaults[.gestureSensitivity]) * -20
             }
 
-            if Defaults[.enableHaptics] {
-                haptics.toggle()
+            if translation > swipeThreshold && !upGestureTriggered {
+                upGestureTriggered = true
+                withAnimation(animationSpring) {
+                    isHovering = false
+                    gestureProgress = .zero
+                }
+                if !SharingStateManager.shared.preventNotchClose {
+                    musicBarHidden = false
+                    vm.close()
+                }
+                if Defaults[.enableHaptics] { haptics.toggle() }
+            }
+        } else if vm.notchState == .closed && !vm.hideOnClosed && !upGestureTriggered && Defaults[.canSwipeUpCycle] {
+            if translation > swipeThreshold {
+                upGestureTriggered = true
+                withAnimation(animationSpring) { musicBarHidden.toggle() }
+                if Defaults[.enableHaptics] { haptics.toggle() }
             }
         }
+    }
+
+    @ViewBuilder
+    func SongDetailsCard() -> some View {
+        HStack(spacing: 10) {
+            Image(nsImage: musicManager.albumArt)
+                .resizable()
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(musicManager.songTitle)
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(musicManager.artistName)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 13)
+                .fill(Color(white: 0.12))
+                .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
+        )
+        .frame(maxWidth: 260)
     }
 }
 

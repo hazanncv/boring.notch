@@ -14,6 +14,7 @@ struct FileShareView: View {
     @EnvironmentObject private var vm: BoringViewModel
     @StateObject private var quickShare = QuickShareService.shared
     @Default(.quickShareProvider) var quickShareProvider: String
+    @Default(.canNewDesign) var canNewDesign
 
     @State private var hostView: NSView?
     @State private var interactionNonce: UUID = .init()
@@ -43,17 +44,21 @@ struct FileShareView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(
-                    LinearGradient(colors: [Color.black.opacity(0.35), Color.black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    canNewDesign
+                        ? AnyShapeStyle(Color(red: 0.07, green: 0.10, blue: 0.17))
+                        : AnyShapeStyle(LinearGradient(colors: [Color.black.opacity(0.35), Color.black.opacity(0.20)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            vm.dropZoneTargeting
-                                ? Color.accentColor.opacity(0.9)
-                                : Color.white.opacity(0.1),
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
-                        )
-                )
+                .overlay {
+                    if !canNewDesign {
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                vm.dropZoneTargeting
+                                    ? Color.accentColor.opacity(0.9)
+                                    : Color.white.opacity(0.1),
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
+                            )
+                    }
+                }
                 .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
 
             // Content
